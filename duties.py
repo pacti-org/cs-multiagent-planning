@@ -285,69 +285,8 @@ def clean(ctx):
     shutil.rmtree("pip-wheel-metadata",ignore_errors=True)
     shutil.rmtree("site",ignore_errors=True)
     shutil.rmtree("__pycache__",ignore_errors=True)
-    shutil.rmtree("docs/_case_studies",ignore_errors=True)
     shutil.rmtree(".venv",ignore_errors=True)
 
-
-def copy_case_studies(ctx):
-    if os.path.exists("docs/_case_studies"):
-        shutil.rmtree("docs/_case_studies")
-
-    ctx.run("cp -r case_studies docs/_case_studies")
-    py_files = glob.glob("docs/_case_studies/**/*.py", recursive=True)
-    for path in py_files:
-        pathlib.Path.unlink(Path(path))
-    # get all jupyter files in configuration
-    with open("mkdocs.yml") as f:
-        contents = f.readlines()
-    nb_files_use = []
-    for line in contents:
-        m = re.match("^.*?([^\s]*\.ipynb)", line)
-        if m:
-            nb_files_use.append(Path("docs/" + m.groups()[0]))
-    nb_files = glob.glob("docs/_case_studies/**/*.ipynb", recursive=True)
-    for file in nb_files:
-        path = Path(file)
-        if path not in nb_files_use:
-            pathlib.Path.unlink(path)
-
-
-@duty
-def docs(ctx):
-    """
-    Build the documentation locally.
-
-    Arguments:
-        ctx: The context instance (passed automatically).
-    """
-    copy_case_studies(ctx)
-    ctx.run("mkdocs build", title="Building documentation")
-
-
-@duty
-def docs_serve(ctx, host="127.0.0.1", port=8000):
-    """
-    Serve the documentation (localhost:8000).
-
-    Arguments:
-        ctx: The context instance (passed automatically).
-        host: The host to serve the docs from.
-        port: The port to serve the docs on.
-    """
-    copy_case_studies(ctx)
-    ctx.run(f"mkdocs serve -a {host}:{port}", title="Serving documentation", capture=False)
-
-
-@duty
-def docs_deploy(ctx):
-    """
-    Deploy the documentation on GitHub pages.
-
-    Arguments:
-        ctx: The context instance (passed automatically).
-    """
-    copy_case_studies
-    ctx.run("mkdocs gh-deploy", title="Deploying documentation")
 
 
 @duty
