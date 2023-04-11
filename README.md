@@ -10,8 +10,8 @@ This is the [Robotarium](https://www.robotarium.gatech.edu) implementation of a 
 ![Robotarium Implementation](https://github.com/pacti-org/media/blob/main/case_studies/multiagent_coordination/robotarium.gif?raw=true)
 
 ### Dependencies
-This case study requires Pacti, to install Pacti please run the following command:
-```pip install Pacti```
+This case study requires Pacti, to automatically install Pacti please run the following command in this directory:
+```pdm install```
 
 ### Run the Case Study
 Run ```multiagent.ipynb``` to run the case study.
