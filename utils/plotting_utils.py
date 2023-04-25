@@ -1,5 +1,4 @@
 """Utility functions for plotting."""
-import display
 import matplotlib.pyplot as plt  # noqa: WPS301
 import numpy as np
 from IPython.display import HTML
