@@ -1,6 +1,6 @@
 """Utility functions for the multiagent coordination case study."""
 import random
-from itertools import combinations
+from itertools import combinations, product
 from typing import List
 
 import numpy as np
@@ -297,6 +297,86 @@ def find_move_candidates_three(  # noqa: WPS231
 
                             if contract.a.contains_behavior(var_dict) and contract.g.contains_behavior(var_dict):
                                 possible_sol.append([(x_a, y_a), (x_b, y_b), (x_c, y_c)])
+
+    return possible_sol, T_1
+
+
+def find_move_candidates_general(  # noqa: WPS231
+    grid_n: int, grid_m: int, robots: List[Robot], T_0: int, contract: PolyhedralContractCompound  # noqa: N803
+) -> tuple[list, int]:
+    """
+    Evaluate the contracts for possible next positions of the robots to find allowed moves.
+
+    Args:
+        grid_n: Grid dimension n.
+        grid_m: Grid dimension m.
+        robots: list of robots.
+        T_0: Current time step.
+        contract: The contract that the next positions must satisfy.
+
+    Returns:
+        A list of possible next positions and the next timestep.
+    """
+    robotnames = []
+    var_dict = {}
+    for robot in robots:
+        robotnames.append(robot.name)
+        var_dict.update({Var("x_"+str(robot.name)+"_0"): robot.pos.x})
+        var_dict.update({Var("y_"+str(robot.name)+"_0"): robot.pos.y})
+
+    robotcombis = combinations(robots, 2)
+    cur_dist = 99
+    for combi in list(robotcombis):
+        distance = np.abs(combi[0].pos.x - combi[1].pos.x) + np.abs(combi[0].pos.y - combi[1].pos.y)
+        cur_dist = min(cur_dist, distance)
+    T_1 = T_0 + 1  # noqa: N806
+    var_dict.update({Var("t_0"): T_0})
+    var_dict.update({Var("t_1"): T_1})
+    var_dict.update({Var("current_distance"): cur_dist})
+
+    # next possible positions
+    x_list = list({max(robots[0].pos.x - 1, 0), robots[0].pos.x, min(robots[0].pos.x + 1, grid_n)})
+    y_list = list({max(robots[0].pos.y - 1, 0), robots[0].pos.y, min(robots[0].pos.y + 1, grid_m)})
+    next_possible_positions = []
+    for x in x_list:
+        for y in y_list:
+            next_possible_positions.append([(x,y)])
+
+    for robot in robots[1:]:
+        x_list = list({max(robot.pos.x - 1, 0), robot.pos.x, min(robot.pos.x + 1, grid_n)})
+        y_list = list({max(robot.pos.y - 1, 0), robot.pos.y, min(robot.pos.y + 1, grid_m)})
+        pos = []
+        for x in x_list:
+            for y in y_list:
+                pos.append([(x,y)])
+
+        next_list = []
+        for pos_position in next_possible_positions:
+            for new_robot_pos in pos:
+                entry = pos_position + new_robot_pos
+                next_list.append(entry)
+
+        next_possible_positions = next_list
+
+    possible_sol = []
+    for possible_position in next_possible_positions:
+        pos_dict = {}
+        for i,robot in enumerate(robots):
+            pos_dict.update({robot.name: possible_position[i]})
+            var_dict.update({Var("x_"+str(robot.name)+"_1"): possible_position[i][0]})
+            var_dict.update({Var("y_"+str(robot.name)+"_1"): possible_position[i][1]})
+
+        robotcombis = combinations(robots, 2)
+        for combi in list(robotcombis):
+            del_x_str = "delta_x_" + str(combi[0].name) + "_" + str(str(combi[1].name))
+            del_y_str = "delta_y_" + str(combi[0].name) + "_" + str(str(combi[1].name))
+            del_x = (pos_dict[combi[0].name][0] - pos_dict[combi[1].name][0] ) * (combi[0].pos.x - combi[1].pos.x)
+            del_y = (pos_dict[combi[0].name][1] - pos_dict[combi[1].name][1] ) * (combi[0].pos.y - combi[1].pos.y)
+            var_dict.update({Var(del_x_str): del_x})
+            var_dict.update({Var(del_y_str): del_y})
+
+        if contract.a.contains_behavior(var_dict) and contract.g.contains_behavior(var_dict):
+            possible_sol.append(possible_position)
 
     return possible_sol, T_1
 
