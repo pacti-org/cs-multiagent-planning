@@ -12,7 +12,7 @@ from io import BytesIO
 
 # Function to get the current CPU usage percentage
 def get_cpu_usage():
-    return psutil.cpu_percent(interval=0.1)
+    return psutil.cpu_percent(interval=0.05)
 
 @contextmanager
 def cpu_usage_plot(max_data_points: int = 200):
@@ -82,11 +82,11 @@ def cpu_usage_plot(max_data_points: int = 200):
     cpu_usage_plot_thread = threading.Thread(target=display_cpu_usage_plot_widget, args=(stop_condition,), daemon=True)
     cpu_usage_plot_thread.start()
 
+    stored_output = widgets.Output()
+    
     output_widget = widgets.Output()
     ipyd(output_widget)
 
-    stored_output = widgets.Output()
-    
     # Create a VBox to stack output_widget and stored_output vertically
     display_widget = widgets.VBox([output_widget, stored_output])
     ipyd(display_widget)
@@ -98,7 +98,8 @@ def cpu_usage_plot(max_data_points: int = 200):
     finally:
         stop = True
         cpu_usage_plot_thread.join()
-        clear_output(wait=True)
+        
+        # clear_output(wait=True)
 
     # Display the final plot as part of the notebook
 
