@@ -12,6 +12,7 @@ import numpy as np
 
 from pacti.iocontract import Var
 from pacti.terms.polyhedra import PolyhedralContractCompound
+from pacti_counters import PolyhedralContractCounts, polyhedral_count_stats
 from utils.cpu_usage_plot import *
 
 class Coord:
@@ -395,7 +396,7 @@ def evaluate_position(
     possible_position: List[Tuple[int, int]], 
     robots: List[Robot], 
     contract: PolyhedralContractCompound, 
-    var_dict: dict) -> Optional[List[Tuple[int, int]]]:
+    var_dict: dict) -> Tuple[PolyhedralContractCounts, Optional[List[Tuple[int, int]]]]:
     pos_dict = {}
     for i, robot in enumerate(robots):
         pos_dict.update({robot.name: possible_position[i]})
@@ -412,8 +413,8 @@ def evaluate_position(
         var_dict.update({Var(del_y_str): del_y})
 
     if contract.a.contains_behavior(var_dict) and contract.g.contains_behavior(var_dict):
-        return possible_position
-    return None
+        return PolyhedralContractCounts().update_counts(), possible_position
+    return PolyhedralContractCounts().update_counts(), None
 
 def evaluate_position_wrapper(args):
     return evaluate_position(*args)
@@ -489,11 +490,14 @@ def find_move_candidates_general_par(  # noqa: WPS231
             ]
             possible_sol_filtered = list(executor.map(evaluate_position_wrapper, evaluate_position_args))
 
-        possible_sol = [sol for sol in possible_sol_filtered if sol is not None]
-
         t1 = time.time()
 
-    print(f"Found {len(possible_sol)} possible_sol out of {len(next_possible_positions)} next_possible_positions in {(t1-t0):.2f} seconds.")
+    stats = polyhedral_count_stats([result[0] for result in possible_sol_filtered])
+    possible_sol = [sol[1] for sol in possible_sol_filtered if sol[1]]
+
+    print(
+        f"Found {len(possible_sol)} possible_sol out of {len(next_possible_positions)} next_possible_positions in {(t1-t0):.2f} seconds.\n"
+        f"{stats.stats()}")
     return possible_sol, T_1
 
 def robots_move(robots: List[Robot], move: List[tuple[int, int]]) -> None:
