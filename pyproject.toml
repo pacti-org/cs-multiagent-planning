@@ -9,14 +9,15 @@ authors = [{name = "name", email = "email"}]
 license = "BSD-3-Clause"
 dynamic = ["version"]
 dependencies = [
-    "Pacti @ git+https://github.com/pacti-org/pacti.git@78b4f59",
+    # "Pacti-instrumentation @ git+https://github.com/NicolasRouquette/pacti-instrumentation.git",
+    "Pacti @ git+https://github.com/pacti-org/pacti.git@5ce142e",
     "ipykernel>=6.22.0",
     "notebook>=6.5.3",
     "p-tqdm>=1.4.0",
     "py-cpuinfo>=9.0.0",
     "ipywidgets>=8.0.6",
 ]
-requires-python = ">=3.8, <=3.11.1"
+requires-python = ">=3.8, <3.12"
 
 [project.scripts]
 #pacti = "pacti.cli:main"

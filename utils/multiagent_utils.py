@@ -12,7 +12,7 @@ import numpy as np
 
 from pacti.iocontract import Var
 from pacti.terms.polyhedra import PolyhedralContractCompound
-from pacti_counters import PolyhedralContractCounts, polyhedral_count_stats
+from pacti_counters import PactiInstrumentationData, PactiInstrumentationSummary, summarize_instrumentation_data
 from utils.cpu_usage_plot import *
 
 class Coord:
@@ -396,7 +396,7 @@ def evaluate_position(
     possible_position: List[Tuple[int, int]], 
     robots: List[Robot], 
     contract: PolyhedralContractCompound, 
-    var_dict: dict) -> Tuple[PolyhedralContractCounts, Optional[List[Tuple[int, int]]]]:
+    var_dict: dict) -> Tuple[PactiInstrumentationData, Optional[List[Tuple[int, int]]]]:
     pos_dict = {}
     for i, robot in enumerate(robots):
         pos_dict.update({robot.name: possible_position[i]})
@@ -413,15 +413,15 @@ def evaluate_position(
         var_dict.update({Var(del_y_str): del_y})
 
     if contract.a.contains_behavior(var_dict) and contract.g.contains_behavior(var_dict):
-        return PolyhedralContractCounts().update_counts(), possible_position
-    return PolyhedralContractCounts().update_counts(), None
+        return PactiInstrumentationData().update_counts(), possible_position
+    return PactiInstrumentationData().update_counts(), None
 
 def evaluate_position_wrapper(args):
     return evaluate_position(*args)
 
 def find_move_candidates_general_par(  # noqa: WPS231
     grid_n: int, grid_m: int, robots: List[Robot], T_0: int, contract: PolyhedralContractCompound  # noqa: N803
-) -> tuple[list, int]:
+) -> tuple[PactiInstrumentationSummary, list, int]:
     """
     Evaluate the contracts for possible next positions of the robots to find allowed moves.
 
@@ -478,7 +478,7 @@ def find_move_candidates_general_par(  # noqa: WPS231
 
     print(f"Evaluating {len(next_possible_positions)} next_possible_positions...")
 
-    with cpu_usage_plot():
+    with cpu_usage_plot(cpu_measurement_interval=0.025):
 
         t0 = time.time()
 
@@ -492,13 +492,13 @@ def find_move_candidates_general_par(  # noqa: WPS231
 
         t1 = time.time()
 
-    stats = polyhedral_count_stats([result[0] for result in possible_sol_filtered])
+    stats = summarize_instrumentation_data([result[0] for result in possible_sol_filtered])
     possible_sol = [sol[1] for sol in possible_sol_filtered if sol[1]]
 
     print(
         f"Found {len(possible_sol)} possible_sol out of {len(next_possible_positions)} next_possible_positions in {(t1-t0):.2f} seconds.\n"
         f"{stats.stats()}")
-    return possible_sol, T_1
+    return stats, possible_sol, T_1
 
 def robots_move(robots: List[Robot], move: List[tuple[int, int]]) -> None:
     """
