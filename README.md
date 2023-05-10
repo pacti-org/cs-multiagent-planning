@@ -14,4 +14,9 @@ This case study requires Pacti, to automatically install Pacti please run the fo
 ```pdm install```
 
 ### Run the Case Study
-Run ```multiagent.ipynb``` to run the case study.
+
+Run [`multiagent.ipynb`](multiagent.ipynb) to run the case study.
+
+### Run the Case Study with CPU measurements
+
+Run [`multiagent_scaling.ipynb`](multiagent_scaling.ipynb) to run the case study.
