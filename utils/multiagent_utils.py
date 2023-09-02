@@ -6,7 +6,7 @@ from typing import List
 import numpy as np
 
 from pacti.iocontract import Var
-from pacti.terms.polyhedra import PolyhedralContractCompound
+from pacti.contracts import PolyhedralIoContractCompound
 
 
 class Coord:
@@ -207,7 +207,7 @@ def strategy_multiple(  # noqa: WPS231,WPS234
 
 
 def find_move_candidates_three(  # noqa: WPS231
-    grid_n: int, grid_m: int, robots: List[Robot], T_0: int, contract: PolyhedralContractCompound  # noqa: N803
+    grid_n: int, grid_m: int, robots: List[Robot], T_0: int, contract: PolyhedralIoContractCompound  # noqa: N803
 ) -> tuple[list, int]:
     """
     Evaluate the contracts for possible next positions of the robots to find allowed moves.
@@ -302,7 +302,7 @@ def find_move_candidates_three(  # noqa: WPS231
 
 
 def find_move_candidates_general(  # noqa: WPS231
-    grid_n: int, grid_m: int, robots: List[Robot], T_0: int, contract: PolyhedralContractCompound  # noqa: N803
+    grid_n: int, grid_m: int, robots: List[Robot], T_0: int, contract: PolyhedralIoContractCompound  # noqa: N803
 ) -> tuple[list, int]:
     """
     Evaluate the contracts for possible next positions of the robots to find allowed moves.
@@ -393,7 +393,7 @@ def robots_move(robots: List[Robot], move: List[tuple[int, int]]) -> None:
         robots[i].move(move[i])
 
 
-def get_swapping_contract(robots: List[Robot]) -> PolyhedralContractCompound:
+def get_swapping_contract(robots: List[Robot]) -> PolyhedralIoContractCompound:
     """
     Contract ensuring no swapping conflicts for all robots.
 
@@ -418,7 +418,7 @@ def get_swapping_contract(robots: List[Robot]) -> PolyhedralContractCompound:
         delta_pairs.append((del_x_str, del_y_str))
     outputvars: list = []
 
-    contract = PolyhedralContractCompound.from_string(
+    contract = PolyhedralIoContractCompound.from_strings(
         input_vars=inputvars,
         output_vars=outputvars,
         assumptions=[["-current_distance <= -1"]],
@@ -428,7 +428,7 @@ def get_swapping_contract(robots: List[Robot]) -> PolyhedralContractCompound:
     return contract  # noqa: WPS331
 
 
-def get_collision_contract(robots: List[Robot]) -> PolyhedralContractCompound:
+def get_collision_contract(robots: List[Robot]) -> PolyhedralIoContractCompound:
     """
     Contract ensuring no collision for all robots.
 
@@ -443,7 +443,7 @@ def get_collision_contract(robots: List[Robot]) -> PolyhedralContractCompound:
         robotnames.append(robot.name)
 
     combis = combinations(robotnames, 2)
-    contracts: List[PolyhedralContractCompound] = []
+    contracts: List[PolyhedralIoContractCompound] = []
     for combi in combis:
         contract = collision_contract_named(combi[0], combi[1])
         contracts.append(contract)
@@ -455,7 +455,7 @@ def get_collision_contract(robots: List[Robot]) -> PolyhedralContractCompound:
     return c_collison
 
 
-def collision_contract_named(robot_1: str, robot_2: str) -> PolyhedralContractCompound:
+def collision_contract_named(robot_1: str, robot_2: str) -> PolyhedralIoContractCompound:
     """
     Contract ensuring no collision for a pair of robots.
 
@@ -482,7 +482,7 @@ def collision_contract_named(robot_1: str, robot_2: str) -> PolyhedralContractCo
         "t_1",
     ]
 
-    contract = PolyhedralContractCompound.from_string(
+    contract = PolyhedralIoContractCompound.from_strings(
         input_vars=inputvars,
         output_vars=outputvars,
         assumptions=[["-current_distance <= -1"]],
