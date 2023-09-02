@@ -9,7 +9,7 @@ authors = [{name = "name", email = "email"}]
 license = "BSD-3-Clause"
 dynamic = ["version"]
 dependencies = [
-    "Pacti @ git+https://github.com/pacti-org/pacti.git@78b4f59",
+    "Pacti @ git+https://github.com/pacti-org/pacti.git@8892ecb",
     "ipykernel>=6.22.0",
     "notebook>=6.5.3",
 ]
