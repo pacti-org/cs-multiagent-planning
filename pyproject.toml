@@ -12,14 +12,10 @@ dependencies = [
     "Pacti @ git+https://github.com/pacti-org/pacti.git@8892ecb",
     "ipykernel>=6.22.0",
     "notebook>=6.5.3",
+    "ipdb>=0.13.13",
+    "ffmpeg>=1.4",
 ]
 requires-python = ">=3.8, <=3.11.1"
-
-[project.scripts]
-#pacti = "pacti.cli:main"
-
-[project.optional-dependencies]
-
 
 [tool.pdm.dev-dependencies]
 duty = ["duty>=0.7"]

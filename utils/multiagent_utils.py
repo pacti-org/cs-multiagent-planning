@@ -4,10 +4,11 @@ from itertools import combinations, product
 from typing import List
 
 import numpy as np
+import time
+import json
 
 from pacti.iocontract import Var
 from pacti.contracts import PolyhedralIoContractCompound
-
 
 class Coord:
     """
@@ -33,9 +34,14 @@ class Robot:
         self.name = name
         self.pos = Coord(pos)
         self.goal = Coord(goal)
+        self.at_goal = False
 
     def move(self, new_pos: tuple[int, int]) -> None:  # noqa: D102
         self.pos = Coord(new_pos)
+        if distance([(self.pos.x, self.pos.y)],[self.goal]) == 0:
+            self.at_goal = True
+        else:
+            self.at_goal = False
 
 
 def distance(candidate: List[tuple[int, int]], goal: List[Coord]) -> int:
@@ -327,12 +333,129 @@ def find_move_candidates_general(  # noqa: WPS231
     robotcombis = combinations(robots, 2)
     cur_dist = 99
     for combi in list(robotcombis):
-        distance = np.abs(combi[0].pos.x - combi[1].pos.x) + np.abs(combi[0].pos.y - combi[1].pos.y)
-        cur_dist = min(cur_dist, distance)
+        distance_btw_robots = np.abs(combi[0].pos.x - combi[1].pos.x) + np.abs(combi[0].pos.y - combi[1].pos.y)
+        cur_dist = min(cur_dist, distance_btw_robots)
     T_1 = T_0 + 1  # noqa: N806
     var_dict.update({Var("t_0"): T_0})
     var_dict.update({Var("t_1"): T_1})
     var_dict.update({Var("current_distance"): cur_dist})
+
+    # current distance to the goal
+    to_goal = distance([[robot.pos.x, robot.pos.y] for robot in robots], [robot.goal for robot in robots])
+    var_dict.update({Var("cur_dist_to_goal"): to_goal})
+
+    # next possible positions
+    x_list = list({max(robots[0].pos.x - 1, 0), robots[0].pos.x, min(robots[0].pos.x + 1, grid_n)})
+    y_list = list({max(robots[0].pos.y - 1, 0), robots[0].pos.y, min(robots[0].pos.y + 1, grid_m)})
+    next_possible_positions = []
+    for x in x_list:
+        for y in y_list:
+            next_possible_positions.append([(x,y)])
+
+    for robot in robots[1:]:
+        x_list = list({max(robot.pos.x - 1, 0), robot.pos.x, min(robot.pos.x + 1, grid_n)})
+        y_list = list({max(robot.pos.y - 1, 0), robot.pos.y, min(robot.pos.y + 1, grid_m)})
+        pos = []
+        for x in x_list:
+            if x == robot.pos.x:
+                for y in y_list:
+                    pos.append([(x,y)])
+            else:
+                y = robot.pos.y
+                pos.append([(x,y)])
+
+        # removing collision states
+        next_list = []
+        for pos_position in next_possible_positions:
+            for new_robot_pos in pos:
+                if new_robot_pos[0] not in pos_position:
+                    entry = pos_position + new_robot_pos
+                    next_list.append(entry)
+
+        next_possible_positions = next_list
+
+    # remove duplicates (shouldn't have any)
+    import itertools
+    next_possible_positions.sort()
+    next_possible_positions = [z for z,_ in itertools.groupby(next_possible_positions)]
+
+    print('total possible positions are {}'.format(len(next_possible_positions)))
+
+    # remove a random element from list
+    while len(next_possible_positions) > 0:
+        possible_position = random.choice(next_possible_positions)
+        next_possible_positions.remove(possible_position)
+
+        pos_dict = {}
+        for i,robot in enumerate(robots):
+            pos_dict.update({robot.name: possible_position[i]})
+            var_dict.update({Var("x_"+str(robot.name)+"_1"): possible_position[i][0]})
+            var_dict.update({Var("y_"+str(robot.name)+"_1"): possible_position[i][1]})
+
+        robotcombis = combinations(robots, 2)
+        for combi in list(robotcombis):
+            del_x_str = "delta_x_" + str(combi[0].name) + "_" + str(str(combi[1].name))
+            del_y_str = "delta_y_" + str(combi[0].name) + "_" + str(str(combi[1].name))
+            del_x = (pos_dict[combi[0].name][0] - pos_dict[combi[1].name][0] ) * (combi[0].pos.x - combi[1].pos.x)
+            del_y = (pos_dict[combi[0].name][1] - pos_dict[combi[1].name][1] ) * (combi[0].pos.y - combi[1].pos.y)
+            var_dict.update({Var(del_x_str): del_x})
+            var_dict.update({Var(del_y_str): del_y})
+
+        # next distance to the goal
+        next_to_goal = distance([[possible_position[i][0], possible_position[i][1]] for i in range(len(possible_position))], [robot.goal for robot in robots])
+        var_dict.update({Var("next_dist_to_goal"): next_to_goal})
+
+        ti = time.time()
+        if contract.a.contains_behavior(var_dict) and contract.g.contains_behavior(var_dict):
+            tf = time.time()
+            print('{0} took {1}'.format(var_dict, tf-ti))
+            return possible_position, T_1
+        tf = time.time()
+        print('{0} took {1}'.format(var_dict, tf-ti))
+
+        str_var_dict = {var.name: var_dict[var] for var in var_dict.keys()}
+        with open('test_behavior.json', 'w') as fp:
+            json.dump(str_var_dict, fp)
+
+
+    return [], T_1
+
+def find_move_candidates_check_all(  # noqa: WPS231
+    grid_n: int, grid_m: int, robots: List[Robot], T_0: int, contract: PolyhedralIoContractCompound  # noqa: N803
+) -> tuple[list, int]:
+    """
+    Evaluate the contracts for possible next positions of the robots to find allowed moves.
+
+    Args:
+        grid_n: Grid dimension n.
+        grid_m: Grid dimension m.
+        robots: list of robots.
+        T_0: Current time step.
+        contract: The contract that the next positions must satisfy.
+
+    Returns:
+        A list of possible next positions and the next timestep.
+    """
+    robotnames = []
+    var_dict = {}
+    for robot in robots:
+        robotnames.append(robot.name)
+        var_dict.update({Var("x_"+str(robot.name)+"_0"): robot.pos.x})
+        var_dict.update({Var("y_"+str(robot.name)+"_0"): robot.pos.y})
+
+    robotcombis = combinations(robots, 2)
+    cur_dist = 99
+    for combi in list(robotcombis):
+        distance_btw_robots = np.abs(combi[0].pos.x - combi[1].pos.x) + np.abs(combi[0].pos.y - combi[1].pos.y)
+        cur_dist = min(cur_dist, distance_btw_robots)
+    T_1 = T_0 + 1  # noqa: N806
+    var_dict.update({Var("t_0"): T_0})
+    var_dict.update({Var("t_1"): T_1})
+    var_dict.update({Var("current_distance"): cur_dist})
+
+    # current distance to the goal
+    to_goal = distance([[robot.pos.x, robot.pos.y] for robot in robots], [robot.goal for robot in robots])
+    var_dict.update({Var("cur_dist_to_goal"): to_goal})
 
     # next possible positions
     x_list = list({max(robots[0].pos.x - 1, 0), robots[0].pos.x, min(robots[0].pos.x + 1, grid_n)})
@@ -353,8 +476,9 @@ def find_move_candidates_general(  # noqa: WPS231
         next_list = []
         for pos_position in next_possible_positions:
             for new_robot_pos in pos:
-                entry = pos_position + new_robot_pos
-                next_list.append(entry)
+                if new_robot_pos[0] not in pos_position:
+                    entry = pos_position + new_robot_pos
+                    next_list.append(entry)
 
         next_possible_positions = next_list
 
@@ -374,6 +498,10 @@ def find_move_candidates_general(  # noqa: WPS231
             del_y = (pos_dict[combi[0].name][1] - pos_dict[combi[1].name][1] ) * (combi[0].pos.y - combi[1].pos.y)
             var_dict.update({Var(del_x_str): del_x})
             var_dict.update({Var(del_y_str): del_y})
+
+        # current distance to the goal
+        next_to_goal = distance([[possible_position[i][0], possible_position[i][1]] for i in range(len(possible_position))], [robot.goal for robot in robots])
+        var_dict.update({Var("next_dist_to_goal"): next_to_goal})
 
         if contract.a.contains_behavior(var_dict) and contract.g.contains_behavior(var_dict):
             possible_sol.append(possible_position)
@@ -534,3 +662,227 @@ def collision_contract_named(robot_1: str, robot_2: str) -> PolyhedralIoContract
         ],
     )
     return contract  # noqa: WPS331
+
+
+def find_move_candidates_separate(  # noqa: WPS231
+    grid_n: int, grid_m: int, robots: List[Robot], T_0: int, contract: PolyhedralIoContractCompound, # noqa: N803
+    contractlist_1 : List[PolyhedralIoContractCompound], contractlist_2 : List[PolyhedralIoContractCompound] ) -> tuple[list, int]:
+    """
+    Evaluate the contracts for possible next positions of the robots to find allowed moves.
+
+    Args:
+        grid_n: Grid dimension n.
+        grid_m: Grid dimension m.
+        robots: list of robots.
+        T_0: Current time step.
+        contract: The contract that the next positions must satisfy.
+
+    Returns:
+        A list of possible next positions and the next timestep.
+    """
+    robotnames = []
+    var_dict = {}
+    for robot in robots:
+        robotnames.append(robot.name)
+        var_dict.update({Var("x_"+str(robot.name)+"_0"): robot.pos.x})
+        var_dict.update({Var("y_"+str(robot.name)+"_0"): robot.pos.y})
+        var_dict.update({Var("dist_"+str(robot.name)+"_0"): distance([[robot.pos.x, robot.pos.y]], [robot.goal])})
+
+    robotcombis = combinations(robots, 2)
+    cur_dist = np.inf
+    for combi in list(robotcombis):
+        distance_btw_robots = np.abs(combi[0].pos.x - combi[1].pos.x) + np.abs(combi[0].pos.y - combi[1].pos.y)
+        cur_dist = min(cur_dist, distance_btw_robots)
+    T_1 = T_0 + 1  # noqa: N806
+    var_dict.update({Var("t_0"): T_0})
+    var_dict.update({Var("t_1"): T_1})
+    var_dict.update({Var("current_distance"): cur_dist})
+
+    # current distance to the goal
+    to_goal = distance([[robot.pos.x, robot.pos.y] for robot in robots], [robot.goal for robot in robots])
+    var_dict.update({Var("cur_dist_to_goal"): to_goal})
+
+    # next possible positions
+    x_list = list({max(robots[0].pos.x - 1, 0), robots[0].pos.x, min(robots[0].pos.x + 1, grid_n)})
+    y_list = list({max(robots[0].pos.y - 1, 0), robots[0].pos.y, min(robots[0].pos.y + 1, grid_m)})
+    next_possible_positions = []
+    for x in x_list:
+        if x == robots[0].pos.x:
+            for y in y_list:
+                next_possible_positions.append([(x,y)])
+        else:
+            y = robots[0].pos.y
+            next_possible_positions.append([(x,y)])
+
+    for robot in robots[1:]:
+        x_list = list({max(robot.pos.x - 1, 0), robot.pos.x, min(robot.pos.x + 1, grid_n)})
+        y_list = list({max(robot.pos.y - 1, 0), robot.pos.y, min(robot.pos.y + 1, grid_m)})
+        pos = []
+        for x in x_list:
+            if x == robot.pos.x:
+                for y in y_list:
+                    pos.append([(x,y)])
+            else:
+                y = robot.pos.y
+                pos.append([(x,y)])
+
+        # removing collision states
+        next_list = []
+        for pos_position in next_possible_positions:
+            for new_robot_pos in pos:
+                if new_robot_pos[0] not in pos_position:
+                    entry = pos_position + new_robot_pos
+                    next_list.append(entry)
+
+        next_possible_positions = next_list
+
+    # remove a random element from list
+    while len(next_possible_positions) > 0:
+        possible_position = random.choice(next_possible_positions)
+        next_possible_positions.remove(possible_position)
+
+        pos_dict = {}
+        for i,robot in enumerate(robots):
+            pos_dict.update({robot.name: possible_position[i]})
+            var_dict.update({Var("x_"+str(robot.name)+"_1"): possible_position[i][0]})
+            var_dict.update({Var("y_"+str(robot.name)+"_1"): possible_position[i][1]})
+            var_dict.update({Var("dist_"+str(robot.name)+"_1"): distance([[possible_position[i][0], possible_position[i][1]]], [robot.goal])})
+
+        # next distance to the goal
+        next_to_goal = distance([[possible_position[i][0], possible_position[i][1]] for i in range(len(possible_position))], [robot.goal for robot in robots])
+        var_dict.update({Var("next_dist_to_goal"): next_to_goal})
+
+        if contract.a.contains_behavior(var_dict) and contract.g.contains_behavior(var_dict):
+            passed = True
+            for c in contractlist_1:
+                if not c.a.contains_behavior(var_dict) or not c.g.contains_behavior(var_dict):
+                    passed = False
+                    break;
+            for c in contractlist_2:
+                if not c.a.contains_behavior(var_dict) or not c.g.contains_behavior(var_dict):
+                    passed = False
+                    break;
+            if passed:
+                return possible_position, T_1
+    return [], T_1
+
+def check_move(var_dict, collision_contract_list, swapping_contract_list):
+    passed = True
+    for c in swapping_contract_list:
+        if not c.g.contains_behavior(var_dict):
+            passed = False
+            break;
+
+    for c in collision_contract_list:
+        if not c.a.contains_behavior(var_dict) or not c.g.contains_behavior(var_dict):
+            passed = False
+            break;
+    if passed:
+        return True
+    return False
+
+
+def find_random_move(  # noqa: WPS231
+    grid_n: int, grid_m: int, robots: List[Robot], T_0: int, contract: PolyhedralIoContractCompound, # noqa: N803
+    contractlist_1 : List[PolyhedralIoContractCompound], contractlist_2 : List[PolyhedralIoContractCompound] ) -> tuple[list, int]:
+    """
+    Evaluate the contracts for possible next positions of the robots to find allowed moves.
+
+    Args:
+        grid_n: Grid dimension n.
+        grid_m: Grid dimension m.
+        robots: list of robots.
+        T_0: Current time step.
+        contract: The contract that the next positions must satisfy.
+        contractlist_1: The list of compound contracts that the next positions must satisfy.
+        contractlist_2: Another list of compound contracts that the next positions must satisfy.
+
+    Returns:
+        A random move containing the next positions and the next timestep, that satisfies all contracts.
+    """
+    robotnames = []
+    var_dict = {}
+    for robot in robots:
+        robotnames.append(robot.name)
+        var_dict.update({Var("x_"+str(robot.name)+"_0"): robot.pos.x})
+        var_dict.update({Var("y_"+str(robot.name)+"_0"): robot.pos.y})
+        var_dict.update({Var("dist_"+str(robot.name)+"_0"): distance([[robot.pos.x, robot.pos.y]], [robot.goal])})
+
+    robotcombis = combinations(robots, 2)
+    cur_dist = np.inf
+    for combi in list(robotcombis):
+        distance_btw_robots = np.abs(combi[0].pos.x - combi[1].pos.x) + np.abs(combi[0].pos.y - combi[1].pos.y)
+        cur_dist = min(cur_dist, distance_btw_robots)
+    T_1 = T_0 + 1  # noqa: N806
+    var_dict.update({Var("t_0"): T_0})
+    var_dict.update({Var("t_1"): T_1})
+    var_dict.update({Var("current_distance"): cur_dist})
+
+    # current distance to the goal
+    to_goal = distance([[robot.pos.x, robot.pos.y] for robot in robots], [robot.goal for robot in robots])
+    var_dict.update({Var("cur_dist_to_goal"): to_goal})
+
+    # next possible positions
+    x_list = list({max(robots[0].pos.x - 1, 0), robots[0].pos.x, min(robots[0].pos.x + 1, grid_n)})
+    y_list = list({max(robots[0].pos.y - 1, 0), robots[0].pos.y, min(robots[0].pos.y + 1, grid_m)})
+    next_possible_positions = []
+
+    for x in x_list:
+        if x == robots[0].pos.x:
+            for y in y_list:
+                next_possible_positions.append([(x,y)])
+        else:
+            y = robots[0].pos.y
+            next_possible_positions.append([(x,y)])
+
+    for robot in robots[1:]:
+        x_list = list({max(robot.pos.x - 1, 0), robot.pos.x, min(robot.pos.x + 1, grid_n)})
+        y_list = list({max(robot.pos.y - 1, 0), robot.pos.y, min(robot.pos.y + 1, grid_m)})
+        pos = []
+        for x in x_list:
+            if x == robot.pos.x:
+                for y in y_list:
+                    pos.append([(x,y)])
+            else:
+                y = robot.pos.y
+                pos.append([(x,y)])
+
+        # removing collision states
+        next_list = []
+        for pos_position in next_possible_positions:
+            for new_robot_pos in pos:
+                if new_robot_pos[0] not in pos_position:
+                    entry = pos_position + new_robot_pos
+                    next_list.append(entry)
+
+        next_possible_positions = next_list
+
+    # pick a random element from list and remove
+    while len(next_possible_positions) > 0:
+        possible_position = random.choice(next_possible_positions)
+        next_possible_positions.remove(possible_position)
+
+        pos_dict = {}
+        for i,robot in enumerate(robots):
+            pos_dict.update({robot.name: possible_position[i]})
+            var_dict.update({Var("x_"+str(robot.name)+"_1"): possible_position[i][0]})
+            var_dict.update({Var("y_"+str(robot.name)+"_1"): possible_position[i][1]})
+            var_dict.update({Var("dist_"+str(robot.name)+"_1"): distance([[possible_position[i][0], possible_position[i][1]]], [robot.goal])})
+
+        # next distance to the goal
+        next_to_goal = distance([[possible_position[i][0], possible_position[i][1]] for i in range(len(possible_position))], [robot.goal for robot in robots])
+        var_dict.update({Var("next_dist_to_goal"): next_to_goal})
+
+        if contract.a.contains_behavior(var_dict) and contract.g.contains_behavior(var_dict):
+            passed = True
+            for c in contractlist_1:
+                if not c.a.contains_behavior(var_dict) or not c.g.contains_behavior(var_dict):
+                    passed = False
+                    break;
+            for c in contractlist_2:
+                if not c.g.contains_behavior(var_dict):
+                    passed = False
+                    break;
+            if passed:
+                return possible_position, T_1
+    return [], T_1

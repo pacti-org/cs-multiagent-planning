@@ -64,7 +64,7 @@ def plot_grid_world(grid_n: int, grid_m: int, robots: list[Robot]) -> None:  # n
     if len(robots) > 5:
         print("Need more colors!")
 
-    colors = ["blue", "red", "orange", "yellow", "green"]
+    colors = ["blue", "red", "orange", "yellow", "green", "purple", "cyan", "magenta", "black", "gray"]
     color_map = {}
     for i, robot in enumerate(robots):
         color_map.update({robot: colors[i]})
@@ -108,6 +108,84 @@ def plot_grid_world(grid_n: int, grid_m: int, robots: list[Robot]) -> None:  # n
                             alpha=0.6,  # noqa: WPS432
                         )
                     )  # noqa: WPS432,WPS319
+
+    ax.set_aspect("equal", "box")
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+    plt.gca().invert_yaxis()
+    plt.title("Grid World")
+    plt.show()
+
+
+def plot_trace_on_grid_world(grid_n: int, grid_m: int, robots: list[Robot], trace) -> None:  # noqa: WPS231
+    """
+    Plot the grid world.
+
+    Args:
+        grid_n: Gridsize n.
+        grid_m: Gridsize m.
+        robots: List of robots.
+    """
+    gridsize = 10
+    if len(robots) > 10:
+        print("Need more colors!")
+
+    colors = ["blue", "red", "orange", "green", "purple", "cyan", "magenta", "black","yellow", "gray"]
+    color_map = {}
+    for i, robot in enumerate(robots):
+        color_map.update({robot: colors[i]})
+
+    xs = np.linspace(0, grid_n * gridsize, grid_n + 1)
+    ys = np.linspace(0, grid_m * gridsize, grid_m + 1)
+    ax = plt.gca()
+
+    w, h = xs[1] - xs[0], ys[1] - ys[0]
+    for i, x in enumerate(xs[:-1]):
+        for j, y in enumerate(ys[:-1]):
+            if i % 2 == j % 2:
+                ax.add_patch(Rectangle((x, y), w, h, fill=True, color="lemonchiffon"))
+    for x in xs:
+        plt.plot([x, x], [ys[0], ys[-1]], color="black", alpha=0.3)  # noqa: WPS432
+    for y in ys:
+        plt.plot([xs[0], xs[-1]], [y, y], color="black", alpha=0.3)  # noqa: WPS432
+
+    for x in range(grid_n):  # plotting the goal positions first
+        for y in range(grid_m):
+            for robot in robots:
+                if (x, y) == robot.goal.xy:  # noqa: WPS309
+                    ax.add_patch(
+                        Circle(
+                            ((x + 0.5) * gridsize, (y + 0.5) * gridsize),  # noqa: BLK100
+                            0.2 * gridsize,  # noqa: WPS432
+                            color=color_map[robot],
+                            alpha=0.3,  # noqa: WPS432
+                        )
+                    )
+
+    for x in range(grid_n):
+        for y in range(grid_m):
+            for i,robot in enumerate(trace[0].robots):
+                if (x, y) == robot.xy:  # noqa: WPS309
+                    ax.add_patch(
+                        Circle(
+                            ((x + 0.5) * gridsize, (y + 0.5) * gridsize),
+                            0.2 * gridsize,  # noqa: WPS432
+                            color=color_map[robots[i]],
+                            alpha=0.6,  # noqa: WPS432
+                        )
+                    )  # noqa: WPS432,WPS319
+
+    # draw trace
+    # from ipdb import set_trace as st
+    # st()
+    for i,robot in enumerate(trace[0].robots):
+        xs = []
+        ys = []
+        for snapshot in trace:
+            xs.append((snapshot.robots[i].x+0.5)*gridsize)
+            ys.append((snapshot.robots[i].y+0.5)*gridsize)
+        ax.plot(xs,ys, color = color_map[robots[i]])
+
 
     ax.set_aspect("equal", "box")
     ax.xaxis.set_visible(False)
